@@ -1,0 +1,6 @@
+{
+  "name": "SentinelSupport",
+  "description": "AI-powered support escalation dashboard featuring RAG-driven retrieval validation, ticket risk analysis, and automated decision pipelines.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
