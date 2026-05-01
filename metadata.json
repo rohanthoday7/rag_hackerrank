@@ -1,6 +1,6 @@
 {
-  "name": "SentinelSupport",
-  "description": "AI-powered support escalation dashboard featuring RAG-driven retrieval validation, ticket risk analysis, and automated decision pipelines.",
+  "name": "Sentinel Support",
+  "description": "An elite AI operations command center for monitoring, processing, and auditing mission-critical AI escalations with cinematic precision.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }
