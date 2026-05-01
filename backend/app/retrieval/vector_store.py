@@ -49,6 +49,20 @@ class InMemoryVectorStore:
         self.docs.append(VectorDoc(document_id=document_id, source=source, chunk=chunk, metadata=metadata, embedding=emb))
         self._rebuild_index()
 
+    def upsert_many(self, records: list[dict]) -> None:
+        for record in records:
+            emb = self._embed(record["chunk"])
+            self.docs.append(
+                VectorDoc(
+                    document_id=record["document_id"],
+                    source=record["source"],
+                    chunk=record["chunk"],
+                    metadata=record["metadata"],
+                    embedding=emb,
+                )
+            )
+        self._rebuild_index()
+
     def _rebuild_index(self) -> None:
         if not self.docs:
             self._index = None
@@ -93,7 +107,7 @@ class InMemoryVectorStore:
         reranked.sort(key=lambda x: x[1], reverse=True)
         ranked_idx = [i for i, _ in reranked[:top_k]]
         score_map = {i: s for i, s in reranked}
-        return [
+        results = [
             {
                 "document_id": self.docs[i].document_id,
                 "source": self.docs[i].source,
@@ -103,3 +117,12 @@ class InMemoryVectorStore:
             }
             for i in ranked_idx
         ]
+        seen = set()
+        deduped = []
+        for result in results:
+            key = (result["source"], result["chunk"][:120])
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(result)
+        return deduped

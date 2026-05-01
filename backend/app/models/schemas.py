@@ -4,9 +4,9 @@ from pydantic import BaseModel, Field
 
 class TicketCreate(BaseModel):
     source: Literal["hackerrank", "claude", "visa"]
-    customer_id: str = "anonymous"
-    subject: str
-    body: str
+    customer_id: str = Field(default="anonymous", min_length=3, max_length=128)
+    subject: str = Field(min_length=5, max_length=256)
+    body: str = Field(min_length=10, max_length=8000)
 
 
 class TicketResult(BaseModel):

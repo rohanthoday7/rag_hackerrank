@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     app_name: str = "SentinelSupport"
     app_env: str = "dev"
     database_url: str = "sqlite+aiosqlite:///./sentinel_support.db"
+    api_key: str = "sentinel-dev-key"
+    require_api_key: bool = True
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     retrieval_top_k: int = 6
     retrieval_min_score: float = 0.35
@@ -16,6 +18,8 @@ class Settings(BaseSettings):
     max_context_chars: int = 3500
     api_rate_limit_per_minute: int = 120
     embedding_fallback_to_hash: bool = True
+    max_request_bytes: int = 32768
+    auto_create_schema: bool = True
 
 
 @lru_cache(maxsize=1)

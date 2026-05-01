@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from collections import defaultdict, deque
 from time import time
 from contextlib import asynccontextmanager
@@ -16,18 +17,29 @@ _rate_buckets: dict[str, deque] = defaultdict(deque)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    if settings.auto_create_schema:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
     logger.info("startup_complete")
     yield
 
 
 app = FastAPI(title="SentinelSupport API", version="1.0.0", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(router)
 
 
 @app.middleware("http")
 async def request_log_middleware(request: Request, call_next):
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > settings.max_request_bytes:
+        return JSONResponse(status_code=413, content={"detail": "payload_too_large"})
     client_key = request.client.host if request.client else "unknown"
     now = time()
     bucket = _rate_buckets[client_key]
@@ -43,8 +55,9 @@ async def request_log_middleware(request: Request, call_next):
 
 
 @app.exception_handler(Exception)
-async def global_exception_handler(_: Request, exc: Exception):
+async def global_exception_handler(request: Request, exc: Exception):
+    request_id = request.headers.get("x-request-id", "unknown")
     logger.error("unhandled_exception", error=str(exc))
-    return JSONResponse(status_code=500, content={"detail": "internal_error", "message": str(exc)})
+    return JSONResponse(status_code=500, content={"detail": "internal_error", "request_id": request_id})
 
 

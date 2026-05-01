@@ -24,49 +24,53 @@ class SentinelOrchestrator:
         self.observe = ObservabilityAgent()
 
     async def process_ticket(self, db: AsyncSession, payload: TicketCreate) -> TicketResult:
-        ticket = Ticket(source=payload.source, customer_id=payload.customer_id, subject=payload.subject, body=payload.body)
-        db.add(ticket)
-        await db.flush()
-        ctx = AgentContext(ticket_id=ticket.id, source=ticket.source, subject=ticket.subject, body=ticket.body)
+        try:
+            ticket = Ticket(source=payload.source, customer_id=payload.customer_id, subject=payload.subject, body=payload.body)
+            db.add(ticket)
+            await db.flush()
+            ctx = AgentContext(ticket_id=ticket.id, source=ticket.source, subject=ticket.subject, body=ticket.body)
 
-        await self.observe.timed(ctx, self.classifier.name, "classify", self.classifier.run)
-        await self.observe.timed(ctx, self.retrieval.name, "retrieve", self.retrieval.run)
-        await self.observe.timed(ctx, self.safety.name, "safety", self.safety.run)
-        await self.observe.timed(ctx, self.escalation.name, "escalation", self.escalation.run)
-        await self.observe.timed(ctx, self.response.name, "respond", self.response.run)
-        await self.observe.timed(ctx, self.confidence.name, "confidence", self.confidence.run)
+            await self.observe.timed(ctx, self.classifier.name, "classify", self.classifier.run)
+            await self.observe.timed(ctx, self.retrieval.name, "retrieve", self.retrieval.run)
+            await self.observe.timed(ctx, self.safety.name, "safety", self.safety.run)
+            await self.observe.timed(ctx, self.escalation.name, "escalation", self.escalation.run)
+            await self.observe.timed(ctx, self.response.name, "respond", self.response.run)
+            await self.observe.timed(ctx, self.confidence.name, "confidence", self.confidence.run)
 
-        for hit in ctx.retrieval.get("hits", []):
-            db.add(
-                RetrievalLog(
-                    ticket_id=ticket.id,
-                    query=ctx.retrieval.get("query", ""),
-                    document_id=hit["document_id"],
-                    score=hit["score"],
-                    metadata_json=hit["metadata"],
+            for hit in ctx.retrieval.get("hits", []):
+                db.add(
+                    RetrievalLog(
+                        ticket_id=ticket.id,
+                        query=ctx.retrieval.get("query", ""),
+                        document_id=hit["document_id"],
+                        score=hit["score"],
+                        metadata_json=hit["metadata"],
+                    )
                 )
-            )
-        db.add(EscalationHistory(ticket_id=ticket.id, escalated=ctx.escalation["escalated"], reason_codes=ctx.escalation["reasons"], risk_score=ctx.escalation["risk_score"], explanation=";".join(ctx.escalation["reasons"])))
-        db.add(ConfidenceScore(ticket_id=ticket.id, breakdown=ctx.confidence, **ctx.confidence))
-        db.add(ResponseRecord(ticket_id=ticket.id, response_text=ctx.response["response_text"], citations=ctx.response["citations"], grounded=ctx.response["grounded"]))
-        for stage, content in [("classification", ctx.classification), ("retrieval", ctx.retrieval), ("safety", ctx.safety), ("escalation", ctx.escalation), ("response", ctx.response), ("confidence", ctx.confidence)]:
-            db.add(Transcript(ticket_id=ticket.id, stage=stage, payload=content))
-        for trace in ctx.traces:
-            db.add(Trace(ticket_id=ticket.id, **trace))
-        await db.commit()
+            db.add(EscalationHistory(ticket_id=ticket.id, escalated=ctx.escalation["escalated"], reason_codes=ctx.escalation["reasons"], risk_score=ctx.escalation["risk_score"], explanation=";".join(ctx.escalation["reasons"])))
+            db.add(ConfidenceScore(ticket_id=ticket.id, breakdown=ctx.confidence, **ctx.confidence))
+            db.add(ResponseRecord(ticket_id=ticket.id, response_text=ctx.response["response_text"], citations=ctx.response["citations"], grounded=ctx.response["grounded"]))
+            for stage, content in [("classification", ctx.classification), ("retrieval", ctx.retrieval), ("safety", ctx.safety), ("escalation", ctx.escalation), ("response", ctx.response), ("confidence", ctx.confidence)]:
+                db.add(Transcript(ticket_id=ticket.id, stage=stage, payload=content))
+            for trace in ctx.traces:
+                db.add(Trace(ticket_id=ticket.id, **trace))
+            await db.commit()
 
-        analytics = {"total_latency_ms": sum(t["latency_ms"] for t in ctx.traces), "stages": len(ctx.traces)}
-        return TicketResult(
-            ticket_id=ticket.id,
-            escalated=ctx.escalation["escalated"],
-            escalation_reasons=ctx.escalation["reasons"],
-            risk_score=ctx.escalation["risk_score"],
-            response_text=ctx.response["response_text"],
-            citations=ctx.response["citations"],
-            confidence=ctx.confidence,
-            traces=ctx.traces,
-            analytics=analytics,
-        )
+            analytics = {"total_latency_ms": sum(t["latency_ms"] for t in ctx.traces), "stages": len(ctx.traces)}
+            return TicketResult(
+                ticket_id=ticket.id,
+                escalated=ctx.escalation["escalated"],
+                escalation_reasons=ctx.escalation["reasons"],
+                risk_score=ctx.escalation["risk_score"],
+                response_text=ctx.response["response_text"],
+                citations=ctx.response["citations"],
+                confidence=ctx.confidence,
+                traces=ctx.traces,
+                analytics=analytics,
+            )
+        except Exception:
+            await db.rollback()
+            raise
 
     async def process_ticket_stream(self, payload: TicketCreate):
         ctx = AgentContext(ticket_id=0, source=payload.source, subject=payload.subject, body=payload.body)

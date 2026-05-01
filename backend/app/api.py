@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 import json
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.responses import StreamingResponse
 from app.core.database import get_db
+from app.core.security import require_api_key
 from app.models.schemas import TicketCreate, TicketResult, AnalyticsSummary
 from app.models.db_models import EscalationHistory, Trace, Transcript
 from app.state import orchestrator, vector_store
@@ -12,12 +13,12 @@ router = APIRouter(prefix="/api/v1")
 
 
 @router.post("/tickets/process", response_model=TicketResult)
-async def process_ticket(payload: TicketCreate, db: AsyncSession = Depends(get_db)):
+async def process_ticket(payload: TicketCreate, db: AsyncSession = Depends(get_db), _: None = Depends(require_api_key)):
     return await orchestrator.process_ticket(db, payload)
 
 
 @router.post("/tickets/process-stream")
-async def process_ticket_stream(payload: TicketCreate):
+async def process_ticket_stream(payload: TicketCreate, _: None = Depends(require_api_key)):
     async def event_gen():
         async for event in orchestrator.process_ticket_stream(payload):
             yield f"data: {json.dumps(event)}\n\n"
@@ -26,17 +27,17 @@ async def process_ticket_stream(payload: TicketCreate):
 
 
 @router.get("/analytics/summary", response_model=AnalyticsSummary)
-async def analytics_summary(db: AsyncSession = Depends(get_db)):
+async def analytics_summary(db: AsyncSession = Depends(get_db), _: None = Depends(require_api_key)):
     return await orchestrator.analytics_summary(db)
 
 
 @router.get("/retrieval/search")
-async def retrieval_search(q: str, top_k: int = 6):
+async def retrieval_search(q: str = Query(min_length=3, max_length=512), top_k: int = Query(default=6, ge=1, le=20), _: None = Depends(require_api_key)):
     return {"query": q, "results": vector_store.search(q, top_k)}
 
 
 @router.get("/escalations/queue")
-async def escalation_queue(db: AsyncSession = Depends(get_db)):
+async def escalation_queue(db: AsyncSession = Depends(get_db), _: None = Depends(require_api_key)):
     rows = (
         await db.execute(
             select(EscalationHistory.ticket_id, EscalationHistory.risk_score, EscalationHistory.reason_codes)
@@ -49,7 +50,7 @@ async def escalation_queue(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/tickets/{ticket_id}/traces")
-async def ticket_traces(ticket_id: int, db: AsyncSession = Depends(get_db)):
+async def ticket_traces(ticket_id: int, db: AsyncSession = Depends(get_db), include_payload: bool = False, _: None = Depends(require_api_key)):
     traces = (
         await db.execute(
             select(Trace.agent_name, Trace.step_name, Trace.latency_ms, Trace.reasoning)
@@ -64,15 +65,16 @@ async def ticket_traces(ticket_id: int, db: AsyncSession = Depends(get_db)):
             .order_by(Transcript.id.asc())
         )
     ).all()
+    transcript_view = [{"stage": s[0], "payload": s[1]} for s in transcript] if include_payload else [{"stage": s[0], "payload": {"redacted": True}} for s in transcript]
     return {
         "ticket_id": ticket_id,
         "trace_timeline": [{"agent_name": t[0], "step_name": t[1], "latency_ms": t[2], "reasoning": t[3]} for t in traces],
-        "transcript": [{"stage": s[0], "payload": s[1]} for s in transcript],
+        "transcript": transcript_view,
     }
 
 
 @router.get("/analytics/timeline")
-async def analytics_timeline(db: AsyncSession = Depends(get_db)):
+async def analytics_timeline(db: AsyncSession = Depends(get_db), _: None = Depends(require_api_key)):
     rows = (await db.execute(select(Trace.ticket_id, Trace.step_name, Trace.latency_ms, Trace.created_at).order_by(Trace.created_at.desc()).limit(300))).all()
     return {
         "events": [
@@ -80,3 +82,14 @@ async def analytics_timeline(db: AsyncSession = Depends(get_db)):
             for r in rows
         ]
     }
+
+
+@router.get("/healthz")
+async def healthz():
+    return {"status": "ok"}
+
+
+@router.get("/readyz")
+async def readyz(db: AsyncSession = Depends(get_db)):
+    await db.execute(select(1))
+    return {"status": "ready"}

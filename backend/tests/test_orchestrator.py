@@ -13,7 +13,7 @@ def test_fraud_ticket_escalates():
                 db,
                 TicketCreate(
                     source="visa",
-                    customer_id="u1",
+                    customer_id="u1001",
                     subject="Unauthorized charge happened",
                     body="fraud on my visa card and suspicious activity",
                 ),
@@ -31,7 +31,7 @@ def test_grounded_response_has_citations_when_not_escalated():
                 db,
                 TicketCreate(
                     source="hackerrank",
-                    customer_id="u2",
+                    customer_id="u1002",
                     subject="HackerRank login issue",
                     body="Account locked and reset not working",
                 ),

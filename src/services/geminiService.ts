@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const geminiKey = import.meta.env.VITE_GEMINI_API_KEY;
+const ai = geminiKey ? new GoogleGenAI({ apiKey: geminiKey }) : null;
 
 export async function askRAG(question: string, context: string[]) {
   const prompt = `
@@ -15,6 +16,9 @@ export async function askRAG(question: string, context: string[]) {
   `;
 
   try {
+    if (!ai) {
+      return "Gemini API key is not configured. Add VITE_GEMINI_API_KEY in your .env file to enable live RAG responses.";
+    }
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
@@ -43,6 +47,14 @@ export async function classifyTicket(description: string) {
   `;
 
   try {
+    if (!ai) {
+      return {
+        category: "General Inquiry",
+        risk: "MED",
+        confidence: 0,
+        note: "Gemini API key missing. Classification fallback used.",
+      };
+    }
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
