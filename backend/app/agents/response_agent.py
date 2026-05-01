@@ -1,7 +1,8 @@
 from app.agents.types import AgentContext
+from app.agents.base import BaseAgent
+import json
 
-
-class ResponseAgent:
+class ResponseAgent(BaseAgent):
     name = "response_agent"
 
     async def run(self, ctx: AgentContext) -> dict:
@@ -11,21 +12,34 @@ class ResponseAgent:
                 "signals. We have attached the relevant knowledge-base context to speed up resolution."
             )
             citations = []
+            grounded = True
         else:
             hits = ctx.retrieval.get("hits", [])
-            if not hits:
-                text = (
-                    "I cannot provide a grounded answer from the approved support corpus for this request. "
-                    "To prevent hallucinations, this case should be escalated to a human specialist."
-                )
-                citations = []
-            else:
-                support_points = ctx.retrieval.get("compressed_context", "")
-                text = (
-                    "Based on approved support documentation, here are the safest next steps: "
-                    f"{support_points} If this does not resolve the issue, reply and I will escalate immediately."
-                )
-                citations = [{"document_id": h["document_id"], "score": h["score"], "source": h["source"]} for h in hits[:3]]
-        result = {"response_text": text, "citations": citations, "grounded": len(citations) > 0 or ctx.escalation.get("escalated", False)}
+            context = "\n".join([f"DOC {i}: {h['chunk']}" for i, h in enumerate(hits)])
+            
+            prompt = f"""
+            Generate a grounded response for the customer (Stage 4).
+            
+            Subject: {ctx.subject}
+            Body: {ctx.body}
+            
+            Retrieved Docs:
+            {context}
+            
+            Rules:
+            - Strictly use the provided docs.
+            - If info is missing, say you cannot provide a grounded answer.
+            
+            Return JSON with:
+            - response_text: string
+            - grounded: boolean
+            """
+            
+            llm_res = self.llm.generate_json(self.system_prompt, prompt)
+            text = llm_res.get("response_text", "I cannot provide a grounded answer for this request.")
+            grounded = llm_res.get("grounded", False)
+            citations = [{"document_id": h["document_id"], "score": h["score"], "source": h["source"]} for h in hits[:3]]
+            
+        result = {"response_text": text, "citations": citations, "grounded": grounded}
         ctx.response = result
         return result

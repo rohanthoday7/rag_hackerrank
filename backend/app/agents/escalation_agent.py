@@ -1,32 +1,29 @@
 from app.agents.types import AgentContext
+from app.agents.base import BaseAgent
 from app.core.config import get_settings
 
-
-class EscalationAgent:
+class EscalationAgent(BaseAgent):
     name = "escalation_agent"
 
     def __init__(self):
+        super().__init__()
         self.settings = get_settings()
 
     async def run(self, ctx: AgentContext) -> dict:
-        reasons = []
-        risk = 0.0
-        if ctx.classification.get("urgency") == "high":
-            reasons.append("high_urgency")
-            risk += 0.25
-        if ctx.classification.get("issue_type") in {"fraud", "billing"}:
-            reasons.append("sensitive_issue_type")
-            risk += 0.25
-        if not ctx.safety.get("safe_to_answer", True):
-            reasons.append("safety_flags_present")
-            risk += 0.35
-        if ctx.retrieval.get("retrieval_confidence", 0.0) < self.settings.retrieval_min_score:
-            reasons.append("insufficient_grounding")
-            risk += 0.35
-        if not ctx.retrieval.get("hits"):
-            reasons.append("no_grounded_sources")
-            risk += 0.4
-        escalated = risk >= self.settings.escalation_threshold
-        result = {"escalated": escalated, "risk_score": round(min(1.0, risk), 4), "reasons": reasons}
+        risk_score = ctx.safety.get("risk_score", 0.0)
+        reasons = ctx.safety.get("flags", [])
+        
+        # Enforce escalation based on LLM risk score and safety compliance
+        escalated = risk_score > 0.6 or not ctx.safety.get("safe_to_answer", True)
+        
+        if escalated and not reasons:
+            reasons.append("high_risk_threshold_breach")
+            
+        result = {
+            "escalated": escalated,
+            "risk_score": risk_score,
+            "reasons": reasons,
+            "explanation": ctx.safety.get("explanation", "Escalated due to safety/risk signals.")
+        }
         ctx.escalation = result
         return result

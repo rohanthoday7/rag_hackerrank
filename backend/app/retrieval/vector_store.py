@@ -1,7 +1,9 @@
 from __future__ import annotations
 from dataclasses import dataclass
+import os
 import hashlib
 import numpy as np
+from google import genai
 from app.core.config import get_settings
 
 try:
@@ -39,8 +41,19 @@ class InMemoryVectorStore:
             return np.asarray(vec, dtype=np.float32)
         if not self.settings.embedding_fallback_to_hash:
             raise RuntimeError("Embedding model unavailable and fallback disabled")
-        digest = hashlib.sha256(text.encode("utf-8")).digest()
-        vec = np.frombuffer(digest, dtype=np.uint8).astype(np.float32)
+        
+        try:
+            api_key = os.getenv("GEMINI_API_KEY", "dummy-key")
+            client = genai.Client(api_key=api_key)
+            result = client.models.embed_content(
+                model='text-embedding-004',
+                contents=text
+            )
+            vec = np.asarray(result.embeddings[0].values, dtype=np.float32)
+        except Exception as e:
+            print(f"Fallback embedding failed: {e}")
+            vec = np.zeros(768, dtype=np.float32)
+            
         norm = np.linalg.norm(vec) or 1.0
         return vec / norm
 

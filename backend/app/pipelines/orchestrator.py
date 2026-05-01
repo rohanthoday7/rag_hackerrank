@@ -7,6 +7,7 @@ from app.agents.safety_agent import SafetyAgent
 from app.agents.escalation_agent import EscalationAgent
 from app.agents.response_agent import ResponseAgent
 from app.agents.confidence_agent import ConfidenceAgent
+from app.agents.gap_analysis_agent import GapAnalysisAgent
 from app.agents.observability_agent import ObservabilityAgent
 from app.models.db_models import Ticket, RetrievalLog, EscalationHistory, ConfidenceScore, ResponseRecord, Transcript, Trace
 from app.models.schemas import TicketCreate, TicketResult, AnalyticsSummary
@@ -21,6 +22,7 @@ class SentinelOrchestrator:
         self.escalation = EscalationAgent()
         self.response = ResponseAgent()
         self.confidence = ConfidenceAgent()
+        self.gap_analysis = GapAnalysisAgent()
         self.observe = ObservabilityAgent()
 
     async def process_ticket(self, db: AsyncSession, payload: TicketCreate) -> TicketResult:
@@ -36,6 +38,7 @@ class SentinelOrchestrator:
             await self.observe.timed(ctx, self.escalation.name, "escalation", self.escalation.run)
             await self.observe.timed(ctx, self.response.name, "respond", self.response.run)
             await self.observe.timed(ctx, self.confidence.name, "confidence", self.confidence.run)
+            await self.observe.timed(ctx, self.gap_analysis.name, "gap_analysis", self.gap_analysis.run)
 
             for hit in ctx.retrieval.get("hits", []):
                 db.add(
@@ -67,6 +70,7 @@ class SentinelOrchestrator:
                 confidence=ctx.confidence,
                 traces=ctx.traces,
                 analytics=analytics,
+                gap_analysis=ctx.gap_analysis if hasattr(ctx, "gap_analysis") else None,
             )
         except Exception:
             await db.rollback()

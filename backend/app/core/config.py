@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     app_env: str = "dev"
     database_url: str = "sqlite+aiosqlite:///./sentinel_support.db"
     api_key: str = "sentinel-dev-key"
+    gemini_api_key: str = ""
+
     require_api_key: bool = True
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     retrieval_top_k: int = 6

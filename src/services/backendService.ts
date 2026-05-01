@@ -31,6 +31,14 @@ export type ProcessTicketResult = {
     escalation_confidence: number;
     final_confidence: number;
   };
+  gap_analysis?: {
+    gap_detected: boolean;
+    missing_topic: string;
+    suggested_content: string;
+    impact_score: number;
+  };
+  traces?: any[];
+  citations?: any[];
 };
 
 const API_BASE = import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:8001";
@@ -80,3 +88,50 @@ export async function processTicket(params: { source: "hackerrank" | "claude" | 
   }
   return res.json() as Promise<ProcessTicketResult>;
 }
+export type RetrievalResult = {
+  document_id: string;
+  source: string;
+  chunk: string;
+  score: number;
+  metadata: Record<string, any>;
+};
+
+export async function searchRetrieval(query: string, topK: number = 6) {
+  return apiGet<{ query: string; results: RetrievalResult[] }>(`/api/v1/retrieval/search?q=${encodeURIComponent(query)}&top_k=${topK}`);
+}
+
+export async function* processTicketStream(params: { source: "hackerrank" | "claude" | "visa"; subject: string; body: string }) {
+  const response = await fetch(`${API_BASE}/api/v1/tickets/process-stream`, {
+    method: "POST",
+    headers: apiHeaders(),
+    body: JSON.stringify({
+      source: params.source,
+      customer_id: `web-${Date.now()}`,
+      subject: params.subject,
+      body: params.body,
+    }),
+  });
+
+  if (!response.body) throw new Error("No response body");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    
+    const chunk = decoder.decode(value);
+    const lines = chunk.split("\n");
+    
+    for (const line of lines) {
+      if (line.trim().startsWith("data: ")) {
+        try {
+          yield JSON.parse(line.trim().slice(6));
+        } catch (e) {
+          console.error("Error parsing stream chunk", e);
+        }
+      }
+    }
+  }
+}
+

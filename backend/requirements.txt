@@ -16,3 +16,4 @@ faiss-cpu
 pytest
 pytest-asyncio
 httpx
+google-genai

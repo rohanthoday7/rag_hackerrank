@@ -19,6 +19,7 @@ class TicketResult(BaseModel):
     confidence: dict[str, float]
     traces: list[dict[str, Any]]
     analytics: dict[str, Any]
+    gap_analysis: dict[str, Any] | None = None
 
 
 class RetrievalHit(BaseModel):

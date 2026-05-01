@@ -28,9 +28,22 @@ def simulate(ticket_file: str):
     asyncio.run(_run())
 
 
-@app.command("live-stream")
-def live_stream():
-    console.print("[green]Live pipeline monitor[/green] - use API calls to generate events.")
+@app.command("monitor")
+def monitor(ticket_file: str):
+    async def _run():
+        tickets = json.loads(Path(ticket_file).read_text(encoding="utf-8"))
+        for ticket in tickets:
+            payload = TicketCreate(**ticket)
+            console.print(f"\n[bold yellow]Monitoring Ticket:[/bold yellow] {payload.subject}")
+            async for event in orchestrator.process_ticket_stream(payload):
+                step = event.get("step", "unknown")
+                latency = event.get("latency_ms", 0)
+                console.print(f"  [cyan]»[/cyan] {step:<20} [dim]{latency:>5}ms[/dim]")
+                if "risk_score" in event:
+                    color = "red" if event["risk_score"] > 0.7 else "green"
+                    console.print(f"    [bold {color}]Risk Score:[/bold {color}] {event['risk_score']}")
+            console.print("[green]Processing Complete.[/green]")
+    asyncio.run(_run())
 
 
 @app.command("export-csv")
