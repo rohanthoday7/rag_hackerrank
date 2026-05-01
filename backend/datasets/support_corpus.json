@@ -1,0 +1,23 @@
+[
+  {
+    "id": "hackerrank-auth-001",
+    "source": "hackerrank",
+    "product": "hiring-platform",
+    "title": "HackerRank account access support",
+    "content": "If a candidate account is locked, request the user to reset password from the official reset flow. Never share direct reset links in chat. For suspicious takeover, escalate to trust and safety. Ask for registered email and timestamp of last successful login."
+  },
+  {
+    "id": "claude-billing-001",
+    "source": "claude",
+    "product": "subscription",
+    "title": "Claude billing dispute guidance",
+    "content": "For billing disputes, collect invoice id, billing date, and plan id. Explain that billing investigations require human review. Do not provide legal or financial guarantees. Escalate disputes with unauthorized usage to billing operations."
+  },
+  {
+    "id": "visa-fraud-001",
+    "source": "visa",
+    "product": "payments",
+    "title": "Visa fraud escalation policy",
+    "content": "If customer reports unauthorized card activity, mark as potential fraud. Immediately escalate to fraud operations. Instruct customer to contact official support channels and lock card through approved account tools. Do not ask for full card number."
+  }
+]

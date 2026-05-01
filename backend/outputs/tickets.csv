@@ -1,0 +1,4 @@
+ticket_id,source,subject,escalated,risk_score,final_confidence,response_text
+1,claude,Billing dispute,True,0.85,0.6011,Your request has been escalated to a human specialist because it involves high-risk or policy-sensitive signals. We have attached the relevant knowledge-base context to speed up resolution.
+2,visa,Unauthorized charge happened,True,0.85,0.5385,Your request has been escalated to a human specialist because it involves high-risk or policy-sensitive signals. We have attached the relevant knowledge-base context to speed up resolution.
+3,hackerrank,HackerRank login issue,False,0.6,0.6151,"Based on approved support documentation, here are the safest next steps: If a candidate account is locked, request the user to reset password from the official reset flow. Never share direct reset links in chat. For suspicious takeover, escalate to trust and safety. Ask for registered email a If this does not resolve the issue, reply and I will escalate immediately."

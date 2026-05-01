@@ -1,0 +1,14 @@
+[
+  {
+    "source": "visa",
+    "customer_id": "cust-1001",
+    "subject": "Urgent unauthorized charge on my card",
+    "body": "I saw a fraudulent charge on visa account and need immediate help."
+  },
+  {
+    "source": "hackerrank",
+    "customer_id": "cust-1002",
+    "subject": "Cannot login to HackerRank assessment",
+    "body": "My account seems locked and password reset is failing."
+  }
+]
