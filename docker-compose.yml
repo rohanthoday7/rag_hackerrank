@@ -2,21 +2,54 @@ services:
   backend:
     build:
       context: ./backend
+      dockerfile: Dockerfile
+    container_name: sentinel-backend
+    restart: unless-stopped
     ports:
       - "8001:8001"
     environment:
-      SENTINEL_API_KEY: ${SENTINEL_API_KEY:-sentinel-dev-key}
-      SENTINEL_REQUIRE_API_KEY: "true"
-      SENTINEL_AUTO_CREATE_SCHEMA: "true"
-      SENTINEL_DATABASE_URL: sqlite+aiosqlite:///./sentinel_support.db
+      - SENTINEL_APP_ENV=production
+      - SENTINEL_API_KEY=${SENTINEL_API_KEY:-sentinel-prod-key}
+      - SENTINEL_GEMINI_API_KEY=${SENTINEL_GEMINI_API_KEY}
+      - SENTINEL_REQUIRE_API_KEY=true
+      - SENTINEL_AUTO_CREATE_SCHEMA=true
+      - SENTINEL_DATABASE_URL=sqlite+aiosqlite:///./data/sentinel_support.db
+      - WEB_CONCURRENCY=2
+      - LOG_LEVEL=info
+    volumes:
+      - sentinel_data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/v1/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - sentinel_network
 
   frontend:
     build:
       context: .
+      dockerfile: Dockerfile
+    container_name: sentinel-frontend
+    restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3000:80"
     environment:
-      VITE_BACKEND_URL: http://localhost:8001
-      VITE_BACKEND_API_KEY: ${SENTINEL_API_KEY:-sentinel-dev-key}
+      # In local docker-compose testing, the frontend will talk to the Nginx reverse proxy
+      # But Vite build might bake in the env vars, so we provide them here just in case.
+      - VITE_BACKEND_URL=/api/v1
+      - VITE_BACKEND_API_KEY=${SENTINEL_API_KEY:-sentinel-prod-key}
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    networks:
+      - sentinel_network
+
+volumes:
+  sentinel_data:
+    name: sentinel_data_vol
+
+networks:
+  sentinel_network:
+    driver: bridge

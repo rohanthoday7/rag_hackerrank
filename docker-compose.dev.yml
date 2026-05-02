@@ -1,0 +1,22 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8001:8001"
+    environment:
+      SENTINEL_API_KEY: ${SENTINEL_API_KEY:-sentinel-dev-key}
+      SENTINEL_REQUIRE_API_KEY: "true"
+      SENTINEL_AUTO_CREATE_SCHEMA: "true"
+      SENTINEL_DATABASE_URL: sqlite+aiosqlite:///./sentinel_support.db
+
+  frontend:
+    build:
+      context: .
+    ports:
+      - "3000:3000"
+    environment:
+      VITE_BACKEND_URL: http://localhost:8001
+      VITE_BACKEND_API_KEY: ${SENTINEL_API_KEY:-sentinel-dev-key}
+    depends_on:
+      - backend

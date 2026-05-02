@@ -221,18 +221,40 @@ const Processor = ({ onResult }: { onResult: (r: ProcessTicketResult) => void })
     setResult(null);
     setError(null);
     try {
-      // Use the single processTicket call which is robust
-      const res = await processTicket({ subject, body, source });
-      setResult(res);
-      onResult(res);
-      // Simulate pipeline events from the result traces for visual effect
-      if (res.traces) {
-        res.traces.forEach((t: any, i: number) => {
-          setTimeout(() => setEvents(prev => [...prev, { stage: t.step_name || t.agent_name, payload: t }]), i * 200);
-        });
+      // Use SSE streaming so the Live Pipeline Trace animates in real-time
+      for await (const event of processTicketStream({ subject, body, source })) {
+        if (event.stage === "completed") {
+          // The completed event carries the full result payload
+          const payload = event.payload as any;
+          const finalResult: ProcessTicketResult = {
+            ticket_id: payload.ticket_id ?? 0,
+            escalated: payload.escalation?.escalated ?? payload.escalated ?? false,
+            escalation_reasons: payload.escalation?.reasons ?? payload.escalation_reasons ?? [],
+            risk_score: payload.escalation?.risk_score ?? payload.risk_score ?? 0,
+            response_text: payload.response?.response_text ?? payload.response_text ?? "",
+            confidence: payload.confidence ?? { retrieval_confidence: 0, safety_confidence: 0, escalation_confidence: 0, final_confidence: 0 },
+            gap_analysis: payload.gap_analysis,
+            traces: payload.traces,
+          };
+          setResult(finalResult);
+          onResult(finalResult);
+        }
+        setEvents(prev => [...prev, event]);
       }
     } catch (e: any) {
-      setError(`Processing failed: ${e.message}. Check that the backend is running at http://localhost:8001`);
+      // Fallback to non-streaming if SSE fails
+      try {
+        const res = await processTicket({ subject, body, source });
+        setResult(res);
+        onResult(res);
+        if (res.traces) {
+          res.traces.forEach((t: any, i: number) => {
+            setTimeout(() => setEvents(prev => [...prev, { stage: t.step_name || t.agent_name || "agent", payload: t }]), i * 300);
+          });
+        }
+      } catch (e2: any) {
+        setError(`Processing failed: ${e2.message}. Check that the backend is running at http://localhost:8001`);
+      }
     } finally {
       setLoading(false);
     }
