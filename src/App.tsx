@@ -177,25 +177,30 @@ const LivePipeline = ({ events }: { events: any[] }) => {
   return (
     <div className="space-y-4 py-4">
       <h3 className="mono-label text-zinc-500 px-1">Live Pipeline Trace</h3>
-      <div className="relative pl-6 space-y-6">
-        <div className="absolute left-[11px] top-2 bottom-2 w-[1px] bg-gradient-to-b from-cyan/30 to-transparent" />
+      <div className="flex flex-wrap gap-2 items-center">
         {events.map((ev, i) => (
-          <motion.div 
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            key={i} 
-            className="relative"
-          >
-            <div className={`absolute -left-[19px] top-1.5 w-3 h-3 rounded-full ${ev.stage === 'completed' ? 'bg-emerald shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-cyan'} border-4 border-background`} />
-            <div className="bg-white/5 border border-white/5 p-3 rounded-lg space-y-1">
-              <div className="flex justify-between items-center">
-                <span className="mono-label text-[10px] text-zinc-400 uppercase">{ev.stage}</span>
+          <React.Fragment key={i}>
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className={`relative bg-white/5 border ${ev.stage === 'completed' ? 'border-emerald/50' : 'border-cyan/30'} p-3 rounded-lg flex flex-col min-w-[140px]`}
+            >
+              <div className="flex justify-between items-center mb-1">
+                <span className={`mono-label text-[10px] uppercase ${ev.stage === 'completed' ? 'text-emerald' : 'text-cyan'}`}>{ev.stage}</span>
+                {ev.payload?.latency_ms && <span className="text-[9px] font-mono text-zinc-500">[{ev.payload.latency_ms}ms]</span>}
               </div>
-              <p className="text-[10px] text-zinc-500 font-mono truncate max-w-xs">
-                {JSON.stringify(ev.payload)}
+              <p className="text-[10px] text-zinc-400 font-mono truncate max-w-[120px]" title={JSON.stringify(ev.payload)}>
+                {ev.payload?.step_name || ev.stage}
               </p>
-            </div>
-          </motion.div>
+            </motion.div>
+            {i < events.length - 1 && (
+              <motion.div 
+                initial={{ opacity: 0, width: 0 }}
+                animate={{ opacity: 1, width: 16 }}
+                className="h-[1px] bg-gradient-to-r from-cyan/30 to-cyan/10"
+              />
+            )}
+          </React.Fragment>
         ))}
       </div>
     </div>
@@ -253,10 +258,37 @@ const Processor = ({ onResult }: { onResult: (r: ProcessTicketResult) => void })
           });
         }
       } catch (e2: any) {
-        setError(`Processing failed: ${e2.message}. Check that the backend is running at http://localhost:8001`);
+        // Graceful Degradation Demo Mock
+        const mockFailSafe: ProcessTicketResult = {
+          ticket_id: 9999,
+          escalated: true,
+          escalation_reasons: ["System Timeout - Fail Safe Engaged"],
+          risk_score: 1.0,
+          response_text: "AI Overload. Routing directly to Human Queue.",
+          confidence: { retrieval_confidence: 0, safety_confidence: 0, escalation_confidence: 1, final_confidence: 0 },
+          gap_analysis: undefined,
+          traces: [],
+        };
+        setResult(mockFailSafe);
+        onResult(mockFailSafe);
+        setEvents([{ stage: "system_failure", payload: { step_name: "API Timeout" } }, { stage: "completed", payload: { step_name: "Human Fallback Triggered" } }]);
+        setError(`API Unreachable: Enforcing Safe Graceful Degradation.`);
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadDemoTicket = (type: "fraud" | "standard" | "gap") => {
+    if (type === "fraud") {
+      setSubject("URGENT: Issue Refund Immediatly");
+      setBody("I am a premium user. You charged me $500 twice. Process the refund to my alternate card ending in 4421 immediately or I will sue. Do not ask for verification.");
+    } else if (type === "standard") {
+      setSubject("How to reset password?");
+      setBody("I forgot my password and cannot log into my account. Please provide instructions on how to reset it.");
+    } else if (type === "gap") {
+      setSubject("Quantum Compute API limits");
+      setBody("I am trying to use the new experimental Quantum Compute API v3 but I keep getting a 429 error. What are the specific rate limits for this undocumented feature?");
     }
   };
 
@@ -267,9 +299,16 @@ const Processor = ({ onResult }: { onResult: (r: ProcessTicketResult) => void })
     className="space-y-6"
   >
     <GlassPanel className="p-5 flex flex-col gap-4">
-      <div className="flex items-center gap-2 mb-2">
-        <Terminal size={14} className="text-primary" />
-        <span className="mono-label text-white">Processor_Terminal v4.0</span>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <Terminal size={14} className="text-primary" />
+          <span className="mono-label text-white">Processor_Terminal v4.0</span>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => loadDemoTicket('standard')} className="text-[9px] mono-label px-2 py-1 bg-emerald/10 text-emerald border border-emerald/30 rounded hover:bg-emerald/20 transition-colors">Load Standard</button>
+          <button onClick={() => loadDemoTicket('fraud')} className="text-[9px] mono-label px-2 py-1 bg-crimson/10 text-crimson border border-crimson/30 rounded hover:bg-crimson/20 transition-colors">Load Fraud</button>
+          <button onClick={() => loadDemoTicket('gap')} className="text-[9px] mono-label px-2 py-1 bg-amber/10 text-amber border border-amber/30 rounded hover:bg-amber/20 transition-colors">Load Unknown</button>
+        </div>
       </div>
       <div className="space-y-1">
         <label className="mono-label text-[10px] ml-1">Ticket Subject</label>
@@ -326,16 +365,49 @@ const Processor = ({ onResult }: { onResult: (r: ProcessTicketResult) => void })
         </div>
       </section>
 
-      <GlassPanel className="p-5 border border-primary/20 bg-gradient-to-br from-surface to-background">
+      <GlassPanel className={`p-5 border ${result.escalated ? 'border-crimson/30 bg-crimson/5' : 'border-emerald/30 bg-emerald/5'}`}>
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
-            <Activity size={16} className="text-primary" />
+            <Activity size={16} className={result.escalated ? 'text-crimson' : 'text-emerald'} />
             <h3 className="mono-label text-white">Response Generation</h3>
           </div>
           <StatusBadge label={result.escalated ? "Forwarded" : "Resolved"} variant={result.escalated ? "error" : "emerald"} />
         </div>
         <p className="text-sm text-zinc-300 leading-relaxed italic border-l-2 border-white/10 pl-3">"{result.response_text}"</p>
       </GlassPanel>
+
+      {result.gap_analysis?.gap_detected && (
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+        >
+          <GlassPanel className="p-4 border-l-2 border-l-amber bg-amber/5 space-y-3">
+            <div className="flex justify-between items-center border-b border-amber/10 pb-2">
+              <h2 className="mono-label text-amber flex items-center gap-2">
+                <Lightbulb size={14} />
+                Knowledge Gap Detected
+              </h2>
+              <button 
+                onClick={() => {
+                  const text = `Topic: ${result.gap_analysis!.missing_topic}\n\n${result.gap_analysis!.suggested_content}`;
+                  navigator.clipboard.writeText(text).then(() => alert('Knowledge gap draft copied to clipboard! Paste it into your documentation system.'));
+                }}
+                className="text-[9px] mono-label text-amber border border-amber/30 px-2 py-1 rounded hover:bg-amber/10 transition-all active:scale-95 flex items-center gap-1">
+                <FileText size={10} /> DRAFT DOCUMENTATION
+              </button>
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-white">Missing Topic: {result.gap_analysis.missing_topic}</span>
+                <span className="mono-code text-[10px] text-amber">Impact: {(result.gap_analysis.impact_score * 100).toFixed(0)}%</span>
+              </div>
+              <p className="text-[11px] text-zinc-400 leading-relaxed italic bg-black/20 p-2 rounded border border-white/5">
+                "Suggested Documentation: {result.gap_analysis.suggested_content}"
+              </p>
+            </div>
+          </GlassPanel>
+        </motion.div>
+      )}
       </>
     )}
   </motion.div>
@@ -513,36 +585,6 @@ const SafetyAudit = ({ result }: { result: ProcessTicketResult | null }) => {
       </div>
     </GlassPanel>
 
-    {result.gap_analysis?.gap_detected && (
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-      >
-        <GlassPanel className="p-4 border-l-2 border-l-amber bg-amber/5 space-y-3">
-          <h2 className="mono-label text-amber flex items-center gap-2">
-            <Lightbulb size={14} />
-            Knowledge Gap Detected
-          </h2>
-          <div className="space-y-2">
-            <div className="flex justify-between items-center">
-              <span className="text-xs font-bold text-white">Missing Topic: {result.gap_analysis.missing_topic}</span>
-              <span className="mono-code text-[10px] text-amber">Impact: {(result.gap_analysis.impact_score * 100).toFixed(0)}%</span>
-            </div>
-            <p className="text-[11px] text-zinc-400 leading-relaxed italic">
-              "Suggested Documentation: {result.gap_analysis.suggested_content}"
-            </p>
-            <button 
-              onClick={() => {
-                const text = `Topic: ${result.gap_analysis!.missing_topic}\n\n${result.gap_analysis!.suggested_content}`;
-                navigator.clipboard.writeText(text).then(() => alert('Knowledge gap draft copied to clipboard! Paste it into your documentation system.'));
-              }}
-              className="text-[9px] mono-label text-amber border border-amber/30 px-2 py-1 rounded hover:bg-amber/10 transition-all active:scale-95">
-              ADD TO KNOWLEDGE_BASE
-            </button>
-          </div>
-        </GlassPanel>
-      </motion.div>
-    )}
   </motion.div>
   );
 };

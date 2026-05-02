@@ -1,0 +1,4 @@
+backend/
+.env*
+data/
+sentinel_support.db
